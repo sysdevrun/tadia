@@ -1,9 +1,3 @@
-import type { AppConfig } from '../types';
-
-export function getCurrentTime(simulatedTime: string | null): Date {
-  return simulatedTime ? new Date(simulatedTime) : new Date();
-}
-
 export function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -41,57 +35,32 @@ export function differenceInSeconds(later: Date | string, earlier: Date | string
   return (l.getTime() - e.getTime()) / 1000;
 }
 
-export function isWithinServiceHours(time: Date | string, config: AppConfig): boolean {
-  const d = typeof time === 'string' ? new Date(time) : time;
-  const hour = d.getHours();
-
-  // Service runs 20:00 to 05:00 (next day)
-  if (config.serviceStartHour > config.serviceEndHour) {
-    // Overnight service
-    return hour >= config.serviceStartHour || hour < config.serviceEndHour;
+export function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}min`;
   }
-  return hour >= config.serviceStartHour && hour < config.serviceEndHour;
+  return `${minutes} min`;
 }
 
-export function getValidPickupTimes(simulatedTime: string | null, config: AppConfig): Date[] {
-  const now = getCurrentTime(simulatedTime);
-  const minTime = addMinutes(now, config.minBookingAdvanceMinutes);
-  const times: Date[] = [];
-
-  // Generate time slots in 15-minute intervals
-  const currentDate = new Date(minTime);
-  currentDate.setMinutes(Math.ceil(currentDate.getMinutes() / 15) * 15, 0, 0);
-
-  // Get end of service (05:00 next day if currently after 20:00, or 05:00 today)
-  const endOfService = new Date(now);
-  if (now.getHours() >= config.serviceStartHour) {
-    // After 20:00, service ends at 05:00 next day
-    endOfService.setDate(endOfService.getDate() + 1);
-  }
-  endOfService.setHours(config.serviceEndHour, 0, 0, 0);
-
-  // Also check if we're before 05:00 (early morning), service is still running
-  const startOfService = new Date(now);
-  if (now.getHours() < config.serviceEndHour) {
-    // It's early morning, service started yesterday at 20:00
-    startOfService.setDate(startOfService.getDate() - 1);
-  }
-  startOfService.setHours(config.serviceStartHour, 0, 0, 0);
-
-  while (currentDate < endOfService && times.length < 48) {
-    if (isWithinServiceHours(currentDate, config)) {
-      times.push(new Date(currentDate));
+// Generate time slots from 00:00 to 23:45 in 15-minute intervals
+export function getAllTimeSlots(): string[] {
+  const slots: string[] = [];
+  for (let hour = 0; hour < 24; hour++) {
+    for (let minute = 0; minute < 60; minute += 15) {
+      const h = String(hour).padStart(2, '0');
+      const m = String(minute).padStart(2, '0');
+      slots.push(`${h}:${m}`);
     }
-    currentDate.setMinutes(currentDate.getMinutes() + 15);
   }
-
-  return times;
+  return slots;
 }
 
-export function isValidPickupTime(time: Date | string, simulatedTime: string | null, config: AppConfig): boolean {
-  const t = typeof time === 'string' ? new Date(time) : time;
-  const now = getCurrentTime(simulatedTime);
-  const minTime = addMinutes(now, config.minBookingAdvanceMinutes);
-
-  return t >= minTime && isWithinServiceHours(t, config);
+// Convert time string (HH:MM) to Date using a base date
+export function timeStringToDate(timeString: string): Date {
+  const [hours, minutes] = timeString.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date;
 }

@@ -1,11 +1,8 @@
 import { useState, useMemo } from 'react';
 import type { DebugLogEntry, DebugCategory } from '../types';
-import { formatDateTime } from '../utils/timeUtils';
 
 interface DebugPanelProps {
   debugLog: DebugLogEntry[];
-  simulatedTime: string | null;
-  onSetSimulatedTime: (time: string | null) => void;
   onClearLog: () => void;
   onClose: () => void;
 }
@@ -26,8 +23,6 @@ const CATEGORY_LABELS: Record<DebugCategory, string> = {
 
 export function DebugPanel({
   debugLog,
-  simulatedTime,
-  onSetSimulatedTime,
   onClearLog,
   onClose,
 }: DebugPanelProps) {
@@ -72,13 +67,6 @@ export function DebugPanel({
     URL.revokeObjectURL(url);
   };
 
-  const handleSimulateTime = () => {
-    const now = new Date();
-    // Set to 20:30 today for testing
-    now.setHours(20, 30, 0, 0);
-    onSetSimulatedTime(now.toISOString());
-  };
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
@@ -93,49 +81,6 @@ export function DebugPanel({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-        </div>
-
-        {/* Time Simulation */}
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Time Simulation</p>
-              <p className="text-xs text-gray-500">
-                {simulatedTime
-                  ? `Simulated: ${formatDateTime(simulatedTime)}`
-                  : 'Using real time'}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {simulatedTime ? (
-                <>
-                  <button
-                    onClick={() => {
-                      const t = new Date(simulatedTime);
-                      t.setMinutes(t.getMinutes() + 30);
-                      onSetSimulatedTime(t.toISOString());
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-md"
-                  >
-                    +30 min
-                  </button>
-                  <button
-                    onClick={() => onSetSimulatedTime(null)}
-                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-md"
-                  >
-                    Reset
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleSimulateTime}
-                  className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-md"
-                >
-                  Simulate 20:30
-                </button>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Filters */}
@@ -159,7 +104,7 @@ export function DebugPanel({
         </div>
 
         {/* Log Entries */}
-        <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 280px)' }}>
+        <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
           {filteredLog.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <p>No log entries yet</p>

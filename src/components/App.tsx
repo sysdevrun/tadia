@@ -14,7 +14,6 @@ export function App() {
     cancelBooking,
     startTrip,
     completeTrip,
-    setSimulatedTime,
     clearDebugLog,
     resetAllData,
     addLogEntry,
@@ -131,7 +130,6 @@ export function App() {
       {isBookingModalOpen && (
         <BookingModal
           config={state.config}
-          simulatedTime={state.simulatedTime}
           onClose={() => setIsBookingModalOpen(false)}
           onCreateBooking={createBooking}
           addLogEntry={addLogEntry}
@@ -150,8 +148,6 @@ export function App() {
       {isDebugPanelOpen && (
         <DebugPanel
           debugLog={state.debugLog}
-          simulatedTime={state.simulatedTime}
-          onSetSimulatedTime={setSimulatedTime}
           onClearLog={clearDebugLog}
           onClose={() => setIsDebugPanelOpen(false)}
         />

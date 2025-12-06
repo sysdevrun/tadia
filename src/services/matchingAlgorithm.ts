@@ -37,6 +37,7 @@ interface PoolCandidate {
   newStops: TripStop[];
   estimatedPickupTime: Date;
   estimatedDropoffTime: Date;
+  estimatedDuration: number; // seconds
   score: number;
   routePolyline: string;
 }
@@ -97,6 +98,7 @@ export async function findBestMatch(
       existingPassengers: bestMatch.score,
       estimatedPickupTime: bestMatch.estimatedPickupTime.toISOString(),
       estimatedDropoffTime: bestMatch.estimatedDropoffTime.toISOString(),
+      estimatedDurationSeconds: bestMatch.estimatedDuration,
     });
 
     return {
@@ -105,29 +107,43 @@ export async function findBestMatch(
       vehicleId: bestMatch.trip.vehicleId,
       estimatedPickupTime: bestMatch.estimatedPickupTime.toISOString(),
       estimatedDropoffTime: bestMatch.estimatedDropoffTime.toISOString(),
+      estimatedDuration: bestMatch.estimatedDuration,
       routePolyline: bestMatch.routePolyline,
       newStops: bestMatch.newStops,
     };
   }
 
   // Step 3: Try to create new trip
+  // First calculate route to get accurate duration for vehicle availability check
+  log('calculating_route_for_new_trip', {
+    from: request.pickupLocation,
+    to: request.dropoffLocation,
+  });
+
+  const routeResult = await getRoute(request.pickupLocation, request.dropoffLocation);
+
+  if (!routeResult) {
+    log('match_rejected', { reason: 'Could not calculate route' });
+    return { type: 'rejected', reason: 'Could not calculate route' };
+  }
+
+  const tripDurationSeconds = routeResult.duration;
+  log('route_calculated', {
+    durationSeconds: tripDurationSeconds,
+    durationMinutes: Math.round(tripDurationSeconds / 60),
+    distanceMeters: routeResult.distance,
+  });
+
+  // Now check vehicle availability using actual trip duration
   const availableVehicle = findAvailableVehicle(
     requestedPickup,
+    tripDurationSeconds,
     state.vehicles,
-    state.trips,
-    config
+    state.trips
   );
 
   if (availableVehicle) {
     log('creating_new_trip', { vehicleId: availableVehicle.id });
-
-    // Get direct route for new trip
-    const routeResult = await getRoute(request.pickupLocation, request.dropoffLocation);
-
-    if (!routeResult) {
-      log('match_rejected', { reason: 'Could not calculate route' });
-      return { type: 'rejected', reason: 'Could not calculate route' };
-    }
 
     const pickupTime = requestedPickup;
     const dropoffTime = addSeconds(pickupTime, routeResult.duration);
@@ -159,6 +175,7 @@ export async function findBestMatch(
       vehicleId: availableVehicle.id,
       estimatedPickupTime: pickupTime.toISOString(),
       estimatedDropoffTime: dropoffTime.toISOString(),
+      estimatedDurationSeconds: tripDurationSeconds,
     });
 
     return {
@@ -166,6 +183,7 @@ export async function findBestMatch(
       vehicleId: availableVehicle.id,
       estimatedPickupTime: pickupTime.toISOString(),
       estimatedDropoffTime: dropoffTime.toISOString(),
+      estimatedDuration: tripDurationSeconds,
       routePolyline: routeResult.polyline,
       newStops,
     };
@@ -436,6 +454,7 @@ async function evaluateInsertion(
     dropoffPos,
     estimatedPickupTime: estimatedPickupTime.toISOString(),
     estimatedDropoffTime: estimatedDropoffTime.toISOString(),
+    totalDurationSeconds: routeResult.duration,
   });
 
   return {
@@ -443,6 +462,7 @@ async function evaluateInsertion(
     newStops: updatedStops,
     estimatedPickupTime,
     estimatedDropoffTime,
+    estimatedDuration: routeResult.duration,
     score: existingPassengerCount,
     routePolyline: routeResult.polyline,
   };
@@ -450,13 +470,19 @@ async function evaluateInsertion(
 
 function findAvailableVehicle(
   requestedTime: Date,
+  tripDurationSeconds: number,
   vehicles: Vehicle[],
-  trips: Trip[],
-  _config: AppConfig
+  trips: Trip[]
 ): Vehicle | null {
-  // Estimate new trip duration (45 minutes is reasonable for La Réunion)
-  const estimatedNewTripDuration = 45;
-  const newTripEnd = addMinutes(requestedTime, estimatedNewTripDuration);
+  // Use actual trip duration from Google Maps (add stop time buffer)
+  const tripDurationMinutes = Math.ceil(tripDurationSeconds / 60) + 5; // 5 min buffer for stops
+  const newTripEnd = addMinutes(requestedTime, tripDurationMinutes);
+
+  log('checking_vehicle_availability', {
+    requestedTime: requestedTime.toISOString(),
+    tripDurationMinutes,
+    newTripEnd: newTripEnd.toISOString(),
+  });
 
   for (const vehicle of vehicles) {
     const vehicleTrips = trips.filter(

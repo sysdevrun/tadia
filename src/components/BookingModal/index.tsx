@@ -7,7 +7,6 @@ import { StepConfirm } from './StepConfirm';
 
 interface BookingModalProps {
   config: AppConfig;
-  simulatedTime: string | null;
   onClose: () => void;
   onCreateBooking: (request: BookingRequest) => Promise<{ booking: Booking; trip: Trip } | { error: string }>;
   addLogEntry: (entry: DebugLogEntry) => void;
@@ -26,7 +25,6 @@ type Step = 'pickup' | 'dropoff' | 'time' | 'confirm';
 
 export function BookingModal({
   config,
-  simulatedTime,
   onClose,
   onCreateBooking,
   addLogEntry,
@@ -142,7 +140,6 @@ export function BookingModal({
           {step === 'time' && (
             <StepTime
               config={config}
-              simulatedTime={simulatedTime}
               onComplete={handleTimeComplete}
               onBack={() => setStep('dropoff')}
             />

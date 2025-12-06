@@ -121,6 +121,7 @@ export function useAppState() {
           stops,
           routePolyline: matchResult.routePolyline!,
           departureTime: matchResult.estimatedPickupTime!,
+          estimatedDuration: matchResult.estimatedDuration || 0,
           createdAt: new Date().toISOString(),
         };
 
@@ -165,6 +166,7 @@ export function useAppState() {
           ...existingTrip,
           stops: updatedStops,
           routePolyline: matchResult.routePolyline!,
+          estimatedDuration: matchResult.estimatedDuration || existingTrip.estimatedDuration,
         };
 
         booking.tripId = existingTrip.id;
@@ -305,11 +307,6 @@ export function useAppState() {
     });
   }, []);
 
-  // Time simulation
-  const setSimulatedTime = useCallback((time: string | null) => {
-    setState(prev => ({ ...prev, simulatedTime: time }));
-  }, []);
-
   // Debug log management
   const clearDebugLog = useCallback(() => {
     setState(prev => ({ ...prev, debugLog: [] }));
@@ -332,7 +329,6 @@ export function useAppState() {
     cancelBooking,
     startTrip,
     completeTrip,
-    setSimulatedTime,
     clearDebugLog,
     setDebugLog,
     resetAllData,

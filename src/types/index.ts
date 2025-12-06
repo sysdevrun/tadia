@@ -44,6 +44,7 @@ export interface Trip {
   stops: TripStop[];
   routePolyline: string;
   departureTime: string; // ISO string
+  estimatedDuration: number; // seconds - computed from Google Maps
   createdAt: string; // ISO string
 }
 
@@ -62,9 +63,6 @@ export interface AppConfig {
   seatsPerVehicle: number;
   maxDetourMinutes: number;
   minutesPerStop: number;
-  serviceStartHour: number;
-  serviceEndHour: number;
-  minBookingAdvanceMinutes: number;
   googleMapsApiKey: string;
 }
 
@@ -74,7 +72,6 @@ export interface AppState {
   trips: Trip[];
   debugLog: DebugLogEntry[];
   config: AppConfig;
-  simulatedTime: string | null; // ISO string for time simulation
 }
 
 export interface BookingRequest {
@@ -92,6 +89,7 @@ export interface MatchResult {
   vehicleId?: string;
   estimatedPickupTime?: string;
   estimatedDropoffTime?: string;
+  estimatedDuration?: number; // seconds - computed from Google Maps
   reason?: string;
   routePolyline?: string;
   newStops?: TripStop[];
