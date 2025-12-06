@@ -124,56 +124,6 @@ export function ConfigPanel({ config, onUpdateConfig, onResetAllData, onClose }:
             </div>
           </div>
 
-          {/* Service Hours */}
-          <div className="border-t border-gray-200 pt-4">
-            <h3 className="text-sm font-medium text-gray-800 mb-3">Service Hours</h3>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Start Hour</label>
-                <select
-                  value={localConfig.serviceStartHour}
-                  onChange={(e) => handleChange('serviceStartHour', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">End Hour</label>
-                <select
-                  value={localConfig.serviceEndHour}
-                  onChange={(e) => handleChange('serviceEndHour', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Booking Settings */}
-          <div className="border-t border-gray-200 pt-4">
-            <h3 className="text-sm font-medium text-gray-800 mb-3">Booking Settings</h3>
-
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Minimum Advance Booking (minutes)</label>
-              <input
-                type="number"
-                min={0}
-                max={120}
-                value={localConfig.minBookingAdvanceMinutes}
-                onChange={(e) => handleChange('minBookingAdvanceMinutes', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
           {/* Reset Data */}
           <div className="border-t border-gray-200 pt-4">
             <h3 className="text-sm font-medium text-gray-800 mb-3">Data Management</h3>

@@ -9,7 +9,6 @@ export function getDefaultState(): AppState {
     trips: [],
     debugLog: [],
     config: DEFAULT_CONFIG,
-    simulatedTime: null,
   };
 }
 

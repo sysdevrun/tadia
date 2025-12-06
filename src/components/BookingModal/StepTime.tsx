@@ -1,73 +1,48 @@
 import { useState, useMemo } from 'react';
 import type { AppConfig } from '../../types';
-import { getValidPickupTimes, formatTime } from '../../utils/timeUtils';
+import { getAllTimeSlots, timeStringToDate } from '../../utils/timeUtils';
 
 interface StepTimeProps {
   config: AppConfig;
-  simulatedTime: string | null;
   onComplete: (pickupTime: string, passengerCount: number) => void;
   onBack: () => void;
 }
 
-export function StepTime({ config, simulatedTime, onComplete, onBack }: StepTimeProps) {
-  const [selectedTimeIndex, setSelectedTimeIndex] = useState<number | null>(null);
+export function StepTime({ config, onComplete, onBack }: StepTimeProps) {
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [passengerCount, setPassengerCount] = useState(1);
 
-  const validTimes = useMemo(() => getValidPickupTimes(simulatedTime, config), [simulatedTime, config]);
+  const timeSlots = useMemo(() => getAllTimeSlots(), []);
 
   const handleNext = () => {
-    if (selectedTimeIndex !== null && validTimes[selectedTimeIndex]) {
-      onComplete(validTimes[selectedTimeIndex].toISOString(), passengerCount);
+    if (selectedTime) {
+      const pickupDate = timeStringToDate(selectedTime);
+      onComplete(pickupDate.toISOString(), passengerCount);
     }
   };
-
-  const today = new Date().toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 
   return (
     <div className="space-y-4">
       <h3 className="font-medium text-gray-800">Select Time & Passengers</h3>
 
-      {/* Date (read-only) */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-        <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
-          {today}
-        </div>
-        <p className="text-xs text-gray-500 mt-1">POC only supports same-day bookings</p>
-      </div>
-
       {/* Time Selection */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Time</label>
-        {validTimes.length > 0 ? (
-          <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
-            {validTimes.map((time, index) => (
-              <button
-                key={time.toISOString()}
-                onClick={() => setSelectedTimeIndex(index)}
-                className={`px-2 py-2 text-sm rounded-md border transition-colors ${
-                  selectedTimeIndex === index
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-500'
-                }`}
-              >
-                {formatTime(time)}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-            <p className="text-sm text-yellow-800">
-              No available time slots. Service hours are {config.serviceStartHour}:00 to {config.serviceEndHour}:00.
-              Bookings must be made at least {config.minBookingAdvanceMinutes} minutes in advance.
-            </p>
-          </div>
-        )}
+        <div className="grid grid-cols-6 gap-1 max-h-48 overflow-y-auto p-1 border border-gray-200 rounded-md">
+          {timeSlots.map((time) => (
+            <button
+              key={time}
+              onClick={() => setSelectedTime(time)}
+              className={`px-2 py-1.5 text-sm rounded transition-colors ${
+                selectedTime === time
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-blue-50'
+              }`}
+            >
+              {time}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Passenger Count */}
@@ -94,11 +69,11 @@ export function StepTime({ config, simulatedTime, onComplete, onBack }: StepTime
       </div>
 
       {/* Summary */}
-      {selectedTimeIndex !== null && (
+      {selectedTime && (
         <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
           <p className="text-sm text-blue-800">
             <strong>Summary:</strong> {passengerCount} passenger{passengerCount > 1 ? 's' : ''} at{' '}
-            {formatTime(validTimes[selectedTimeIndex])}
+            {selectedTime}
           </p>
         </div>
       )}
@@ -113,7 +88,7 @@ export function StepTime({ config, simulatedTime, onComplete, onBack }: StepTime
         </button>
         <button
           onClick={handleNext}
-          disabled={selectedTimeIndex === null}
+          disabled={!selectedTime}
           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-md transition-colors"
         >
           Search
