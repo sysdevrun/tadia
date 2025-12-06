@@ -1,9 +1,8 @@
-import { Loader } from '@googlemaps/js-api-loader';
+import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
 import type { Coordinates, RouteResult, DebugLogEntry } from '../types';
 import { generateLogId } from '../utils/idGenerator';
 import { coordinatesToLatLng } from '../utils/routeUtils';
 
-let loader: Loader | null = null;
 let mapsLoaded = false;
 let directionsService: google.maps.DirectionsService | null = null;
 let geocoder: google.maps.Geocoder | null = null;
@@ -51,29 +50,26 @@ export async function initGoogleMaps(apiKey: string): Promise<boolean> {
   }
 
   try {
-    log('api', 'loader_creating', { version: 'weekly', libraries: ['places', 'geometry'] });
+    log('api', 'configuring_loader', { version: 'weekly' });
 
-    loader = new Loader({
-      apiKey,
-      version: 'weekly',
-      libraries: ['places', 'geometry'],
+    // Use the new functional API
+    setOptions({
+      key: apiKey,
+      v: 'weekly',
     });
 
     const startTime = Date.now();
 
     log('api', 'loading_maps_library', {});
-    // @ts-expect-error Loader types don't include importLibrary but it's the correct API
-    await loader.importLibrary('maps');
+    await importLibrary('maps');
     log('api', 'maps_library_loaded', { elapsed: Date.now() - startTime });
 
     log('api', 'loading_places_library', {});
-    // @ts-expect-error Loader types don't include importLibrary but it's the correct API
-    await loader.importLibrary('places');
+    await importLibrary('places');
     log('api', 'places_library_loaded', { elapsed: Date.now() - startTime });
 
     log('api', 'loading_geometry_library', {});
-    // @ts-expect-error Loader types don't include importLibrary but it's the correct API
-    await loader.importLibrary('geometry');
+    await importLibrary('geometry');
     log('api', 'geometry_library_loaded', { elapsed: Date.now() - startTime });
 
     const latencyMs = Date.now() - startTime;
