@@ -16,7 +16,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   serviceStartHour: 20,
   serviceEndHour: 5,
   minBookingAdvanceMinutes: 30,
-  googleMapsApiKey: '',
+  googleMapsApiKey: 'AIzaSyDaenxvBTuIbogoh93C-V5hCh6rfvgngsM',
 };
 
 export const DEFAULT_VEHICLES: Vehicle[] = [
