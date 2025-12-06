@@ -8,12 +8,17 @@ let mapsLoaded = false;
 let directionsService: google.maps.DirectionsService | null = null;
 let geocoder: google.maps.Geocoder | null = null;
 let placesService: google.maps.places.AutocompleteService | null = null;
+let lastError: string | null = null;
 
 type LogCallback = (entry: DebugLogEntry) => void;
 let logCallback: LogCallback | null = null;
 
 export function setLogCallback(callback: LogCallback): void {
   logCallback = callback;
+}
+
+export function getLastError(): string | null {
+  return lastError;
 }
 
 function log(category: DebugLogEntry['category'], action: string, details: Record<string, unknown>): void {
@@ -29,16 +34,25 @@ function log(category: DebugLogEntry['category'], action: string, details: Recor
 }
 
 export async function initGoogleMaps(apiKey: string): Promise<boolean> {
+  log('api', 'init_start', {
+    apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : 'EMPTY',
+    apiKeyLength: apiKey?.length || 0
+  });
+
   if (!apiKey) {
-    log('api', 'init_error', { error: 'No API key provided' });
+    lastError = 'No API key provided';
+    log('api', 'init_error', { error: lastError });
     return false;
   }
 
   if (mapsLoaded) {
+    log('api', 'init_skip', { reason: 'Already loaded' });
     return true;
   }
 
   try {
+    log('api', 'loader_creating', { version: 'weekly', libraries: ['places', 'geometry'] });
+
     loader = new Loader({
       apiKey,
       version: 'weekly',
@@ -46,23 +60,45 @@ export async function initGoogleMaps(apiKey: string): Promise<boolean> {
     });
 
     const startTime = Date.now();
+
+    log('api', 'loading_maps_library', {});
     // @ts-expect-error Loader types don't include importLibrary but it's the correct API
     await loader.importLibrary('maps');
+    log('api', 'maps_library_loaded', { elapsed: Date.now() - startTime });
+
+    log('api', 'loading_places_library', {});
     // @ts-expect-error Loader types don't include importLibrary but it's the correct API
     await loader.importLibrary('places');
+    log('api', 'places_library_loaded', { elapsed: Date.now() - startTime });
+
+    log('api', 'loading_geometry_library', {});
     // @ts-expect-error Loader types don't include importLibrary but it's the correct API
     await loader.importLibrary('geometry');
+    log('api', 'geometry_library_loaded', { elapsed: Date.now() - startTime });
+
     const latencyMs = Date.now() - startTime;
 
+    log('api', 'creating_services', {});
     directionsService = new google.maps.DirectionsService();
     geocoder = new google.maps.Geocoder();
     placesService = new google.maps.places.AutocompleteService();
     mapsLoaded = true;
+    lastError = null;
 
-    log('api', 'init_success', { latencyMs });
+    log('api', 'init_success', { latencyMs, servicesCreated: true });
     return true;
   } catch (error) {
-    log('api', 'init_error', { error: String(error) });
+    const errorMessage = error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : String(error);
+
+    lastError = errorMessage;
+
+    log('api', 'init_error', {
+      error: errorMessage,
+      errorType: error instanceof Error ? error.name : typeof error,
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     return false;
   }
 }

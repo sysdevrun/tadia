@@ -8,6 +8,7 @@ import {
   getPlacePredictions,
   getPlaceDetails,
   decodePolyline,
+  getLastError,
 } from '../services/googleMapsService';
 import type { DebugLogEntry } from '../types';
 import { LA_REUNION_CENTER, DEFAULT_ZOOM } from '../constants';
@@ -32,6 +33,7 @@ export function useGoogleMaps(
 
     if (isGoogleMapsLoaded()) {
       setIsLoaded(true);
+      setError(null);
       return;
     }
 
@@ -39,11 +41,15 @@ export function useGoogleMaps(
       .then((success) => {
         setIsLoaded(success);
         if (!success) {
-          setError('Failed to load Google Maps');
+          const lastError = getLastError();
+          setError(lastError || 'Failed to load Google Maps. Check the Debug panel for details.');
+        } else {
+          setError(null);
         }
       })
       .catch((err) => {
-        setError(String(err));
+        const errorMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        setError(errorMsg);
       });
   }, [apiKey]);
 

@@ -183,9 +183,19 @@ export function MapView({ apiKey, vehicles, trips, bookings, addLogEntry }: MapV
   if (error) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-gray-200">
-        <div className="text-center p-4">
-          <p className="text-gray-600 mb-2">Map unavailable</p>
-          <p className="text-sm text-gray-500">{error}</p>
+        <div className="text-center p-4 max-w-md">
+          <div className="text-4xl mb-4">⚠️</div>
+          <p className="text-gray-700 font-medium mb-2">Map unavailable</p>
+          <p className="text-sm text-red-600 mb-4 break-words">{error}</p>
+          <div className="text-xs text-gray-500 bg-gray-100 p-3 rounded text-left">
+            <p className="font-medium mb-1">Troubleshooting:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Check if the API key is valid</li>
+              <li>Ensure Maps JavaScript API is enabled in Google Cloud Console</li>
+              <li>Check API key restrictions (HTTP referrers, etc.)</li>
+              <li>Open Debug panel to see detailed error logs</li>
+            </ul>
+          </div>
         </div>
       </div>
     );
