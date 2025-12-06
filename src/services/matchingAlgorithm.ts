@@ -454,6 +454,10 @@ function findAvailableVehicle(
   trips: Trip[],
   _config: AppConfig
 ): Vehicle | null {
+  // Estimate new trip duration (45 minutes is reasonable for La Réunion)
+  const estimatedNewTripDuration = 45;
+  const newTripEnd = addMinutes(requestedTime, estimatedNewTripDuration);
+
   for (const vehicle of vehicles) {
     const vehicleTrips = trips.filter(
       t => t.vehicleId === vehicle.id && t.status !== 'completed' && t.status !== 'cancelled'
@@ -467,11 +471,24 @@ function findAvailableVehicle(
       const lastStop = trip.stops[trip.stops.length - 1];
       const tripEnd = lastStop ? new Date(lastStop.scheduledTime) : tripStart;
 
-      // Add buffer for travel to next pickup
-      const bufferEnd = addMinutes(tripEnd, 30);
+      // Add buffer for travel between trips
+      const bufferStart = addMinutes(tripStart, -30); // Buffer before existing trip
+      const bufferEnd = addMinutes(tripEnd, 30);      // Buffer after existing trip
 
-      // Check for overlap
-      if (requestedTime >= tripStart && requestedTime <= bufferEnd) {
+      // Check for overlap: two ranges overlap if start1 < end2 AND start2 < end1
+      // Range 1: [requestedTime, newTripEnd]
+      // Range 2: [bufferStart, bufferEnd]
+      const hasOverlap = requestedTime < bufferEnd && bufferStart < newTripEnd;
+
+      if (hasOverlap) {
+        log('vehicle_busy', {
+          vehicleId: vehicle.id,
+          requestedTime: requestedTime.toISOString(),
+          newTripEnd: newTripEnd.toISOString(),
+          existingTripId: trip.id,
+          existingTripStart: tripStart.toISOString(),
+          existingTripEnd: tripEnd.toISOString(),
+        });
         isAvailable = false;
         break;
       }
