@@ -57,10 +57,13 @@ export function getAllTimeSlots(): string[] {
   return slots;
 }
 
-// Convert time string (HH:MM) to Date using a base date
+// Fixed date for all bookings (2027-01-01)
+export const BOOKING_DATE = new Date(2027, 0, 1); // January 1, 2027
+
+// Convert time string (HH:MM) to Date using fixed date 2027-01-01
 export function timeStringToDate(timeString: string): Date {
   const [hours, minutes] = timeString.split(':').map(Number);
-  const date = new Date();
+  const date = new Date(2027, 0, 1); // January 1, 2027
   date.setHours(hours, minutes, 0, 0);
   return date;
 }
