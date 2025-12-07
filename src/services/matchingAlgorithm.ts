@@ -515,6 +515,39 @@ async function findAvailableVehicle(
       .filter(t => t.vehicleId === vehicle.id && t.status !== 'completed' && t.status !== 'cancelled')
       .sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
 
+    // First, check for any trip that overlaps with the new trip's time window
+    const overlappingTrip = findOverlappingTrip(vehicleTrips, requestedTime, newTripEnd);
+
+    if (overlappingTrip) {
+      // Vehicle is busy with an overlapping trip - calculate when it will be free
+      const lastStop = overlappingTrip.stops[overlappingTrip.stops.length - 1];
+      const overlappingTripEnd = lastStop ? new Date(lastStop.scheduledTime) : new Date(overlappingTrip.departureTime);
+
+      log('overlapping_trip_detected', {
+        vehicleId: vehicle.id,
+        overlappingTripId: overlappingTrip.id,
+        tripStart: new Date(overlappingTrip.departureTime).toISOString(),
+        tripEnd: overlappingTripEnd.toISOString(),
+        requestedTime: requestedTime.toISOString(),
+        newTripEnd: newTripEnd.toISOString(),
+      });
+
+      // Calculate travel time from overlapping trip's end to pickup location
+      if (lastStop) {
+        const travelRoute = await getRoute(lastStop.location, pickupLocation);
+        if (travelRoute) {
+          const vehicleAvailableAt = addSeconds(overlappingTripEnd, travelRoute.duration);
+          const vehicleReadyAt = addMinutes(vehicleAvailableAt, config.bufferMinutes);
+
+          if (!earliestArrivalTime || vehicleReadyAt < earliestArrivalTime) {
+            earliestArrivalTime = vehicleReadyAt;
+          }
+        }
+      }
+
+      continue; // Skip to next vehicle
+    }
+
     // Find the trip that ends just before the requested pickup time
     const priorTrip = findPriorTrip(vehicleTrips, requestedTime);
 
@@ -637,6 +670,22 @@ function findNextTrip(sortedTrips: Trip[], afterTime: Date): Trip | null {
   for (const trip of sortedTrips) {
     const tripStart = new Date(trip.departureTime);
     if (tripStart > afterTime) {
+      return trip;
+    }
+  }
+  return null;
+}
+
+// Find any trip that overlaps with the given time window
+// A trip overlaps if it starts before the new trip ends AND ends after the new trip starts
+function findOverlappingTrip(sortedTrips: Trip[], newTripStart: Date, newTripEnd: Date): Trip | null {
+  for (const trip of sortedTrips) {
+    const tripStart = new Date(trip.departureTime);
+    const lastStop = trip.stops[trip.stops.length - 1];
+    const tripEnd = lastStop ? new Date(lastStop.scheduledTime) : tripStart;
+
+    // Trip overlaps if: tripStart < newTripEnd AND tripEnd > newTripStart
+    if (tripStart < newTripEnd && tripEnd > newTripStart) {
       return trip;
     }
   }
