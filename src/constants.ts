@@ -13,6 +13,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   seatsPerVehicle: 8,
   maxDetourMinutes: 8,
   minutesPerStop: 2,
+  bufferMinutes: 5,
   googleMapsApiKey: 'AIzaSyDaenxvBTuIbogoh93C-V5hCh6rfvgngsM',
 };
 
