@@ -121,6 +121,21 @@ export function ConfigPanel({ config, onUpdateConfig, onResetAllData, onClose }:
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Buffer Time (minutes)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={15}
+                  value={localConfig.bufferMinutes}
+                  onChange={(e) => handleChange('bufferMinutes', parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Time between arrival and pickup
+                </p>
+              </div>
             </div>
           </div>
 

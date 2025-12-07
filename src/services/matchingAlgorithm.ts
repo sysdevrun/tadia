@@ -7,11 +7,12 @@ import type {
   TripStop,
   Booking,
   Vehicle,
+  Coordinates,
   DebugLogEntry,
 } from '../types';
 import { getRoute } from './googleMapsService';
 import { generateLogId, generateStopId } from '../utils/idGenerator';
-import { addMinutes, addSeconds, differenceInMinutes } from '../utils/timeUtils';
+import { addMinutes, addSeconds, differenceInMinutes, formatTime } from '../utils/timeUtils';
 
 type LogCallback = (entry: DebugLogEntry) => void;
 let logCallback: LogCallback | null = null;
@@ -40,6 +41,11 @@ interface PoolCandidate {
   estimatedDuration: number; // seconds
   score: number;
   routePolyline: string;
+}
+
+interface VehicleAvailabilityResult {
+  vehicle: Vehicle | null;
+  earliestAvailableTime: Date | null; // Earliest time any vehicle could arrive at pickup
 }
 
 export async function findBestMatch(
@@ -135,15 +141,17 @@ export async function findBestMatch(
   });
 
   // Now check vehicle availability using actual trip duration
-  const availableVehicle = findAvailableVehicle(
+  const availabilityResult = await findAvailableVehicle(
     requestedPickup,
     tripDurationSeconds,
+    request.pickupLocation,
     state.vehicles,
-    state.trips
+    state.trips,
+    config
   );
 
-  if (availableVehicle) {
-    log('creating_new_trip', { vehicleId: availableVehicle.id });
+  if (availabilityResult.vehicle) {
+    log('creating_new_trip', { vehicleId: availabilityResult.vehicle.id });
 
     const pickupTime = requestedPickup;
     const dropoffTime = addSeconds(pickupTime, routeResult.duration);
@@ -172,7 +180,7 @@ export async function findBestMatch(
 
     log('match_found', {
       type: 'new',
-      vehicleId: availableVehicle.id,
+      vehicleId: availabilityResult.vehicle.id,
       estimatedPickupTime: pickupTime.toISOString(),
       estimatedDropoffTime: dropoffTime.toISOString(),
       estimatedDurationSeconds: tripDurationSeconds,
@@ -180,7 +188,7 @@ export async function findBestMatch(
 
     return {
       type: 'new',
-      vehicleId: availableVehicle.id,
+      vehicleId: availabilityResult.vehicle.id,
       estimatedPickupTime: pickupTime.toISOString(),
       estimatedDropoffTime: dropoffTime.toISOString(),
       estimatedDuration: tripDurationSeconds,
@@ -189,9 +197,22 @@ export async function findBestMatch(
     };
   }
 
-  // Step 4: No solution
-  log('match_rejected', { reason: 'No vehicle available' });
-  return { type: 'rejected', reason: 'No vehicle available for this time slot' };
+  // Step 4: No solution - include earliest available time in message
+  const earliestTime = availabilityResult.earliestAvailableTime;
+  const reason = earliestTime
+    ? `No vehicle available at ${formatTime(requestedPickup)}. Earliest available: ${formatTime(earliestTime)}`
+    : 'No vehicle available for this time slot';
+
+  log('match_rejected', {
+    reason,
+    earliestAvailableTime: earliestTime?.toISOString(),
+  });
+
+  return {
+    type: 'rejected',
+    reason,
+    earliestAvailableTime: earliestTime?.toISOString(),
+  };
 }
 
 async function tryInsertIntoTrip(
@@ -468,65 +489,157 @@ async function evaluateInsertion(
   };
 }
 
-function findAvailableVehicle(
+async function findAvailableVehicle(
   requestedTime: Date,
   tripDurationSeconds: number,
+  pickupLocation: Coordinates,
   vehicles: Vehicle[],
-  trips: Trip[]
-): Vehicle | null {
-  // Use actual trip duration from Google Maps (add stop time buffer)
-  const tripDurationMinutes = Math.ceil(tripDurationSeconds / 60) + 5; // 5 min buffer for stops
+  trips: Trip[],
+  config: AppConfig
+): Promise<VehicleAvailabilityResult> {
+  const tripDurationMinutes = Math.ceil(tripDurationSeconds / 60) + config.minutesPerStop;
   const newTripEnd = addMinutes(requestedTime, tripDurationMinutes);
 
   log('checking_vehicle_availability', {
     requestedTime: requestedTime.toISOString(),
     tripDurationMinutes,
     newTripEnd: newTripEnd.toISOString(),
+    bufferMinutes: config.bufferMinutes,
   });
 
+  let earliestArrivalTime: Date | null = null;
+
   for (const vehicle of vehicles) {
-    const vehicleTrips = trips.filter(
-      t => t.vehicleId === vehicle.id && t.status !== 'completed' && t.status !== 'cancelled'
-    );
+    // Get all active trips for this vehicle, sorted by departure time
+    const vehicleTrips = trips
+      .filter(t => t.vehicleId === vehicle.id && t.status !== 'completed' && t.status !== 'cancelled')
+      .sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
 
-    // Check if vehicle is free around the requested time
-    let isAvailable = true;
+    // Find the trip that ends just before the requested pickup time
+    const priorTrip = findPriorTrip(vehicleTrips, requestedTime);
 
-    for (const trip of vehicleTrips) {
-      const tripStart = new Date(trip.departureTime);
-      const lastStop = trip.stops[trip.stops.length - 1];
-      const tripEnd = lastStop ? new Date(lastStop.scheduledTime) : tripStart;
+    // Find the trip that starts after the new trip would end
+    const nextTrip = findNextTrip(vehicleTrips, newTripEnd);
 
-      // Add buffer for travel between trips
-      const bufferStart = addMinutes(tripStart, -30); // Buffer before existing trip
-      const bufferEnd = addMinutes(tripEnd, 30);      // Buffer after existing trip
+    let canArriveInTime = true;
+    let vehicleArrivalTime: Date | null = null;
 
-      // Check for overlap: two ranges overlap if start1 < end2 AND start2 < end1
-      // Range 1: [requestedTime, newTripEnd]
-      // Range 2: [bufferStart, bufferEnd]
-      const hasOverlap = requestedTime < bufferEnd && bufferStart < newTripEnd;
+    // Check if vehicle can travel from prior trip's last stop to new pickup in time
+    if (priorTrip) {
+      const lastStop = priorTrip.stops[priorTrip.stops.length - 1];
+      if (lastStop) {
+        const priorTripEndTime = new Date(lastStop.scheduledTime);
+        const priorTripEndLocation = lastStop.location;
 
-      if (hasOverlap) {
-        log('vehicle_busy', {
-          vehicleId: vehicle.id,
-          requestedTime: requestedTime.toISOString(),
-          newTripEnd: newTripEnd.toISOString(),
-          existingTripId: trip.id,
-          existingTripStart: tripStart.toISOString(),
-          existingTripEnd: tripEnd.toISOString(),
-        });
-        isAvailable = false;
-        break;
+        // Calculate travel time from prior trip end to new pickup
+        const travelRoute = await getRoute(priorTripEndLocation, pickupLocation);
+
+        if (travelRoute) {
+          const travelTimeSeconds = travelRoute.duration;
+          vehicleArrivalTime = addSeconds(priorTripEndTime, travelTimeSeconds);
+
+          // Vehicle must arrive at pickup location with buffer before requested time
+          const requiredArrivalTime = addMinutes(requestedTime, -config.bufferMinutes);
+
+          log('travel_time_check', {
+            vehicleId: vehicle.id,
+            priorTripId: priorTrip.id,
+            priorTripEndTime: priorTripEndTime.toISOString(),
+            travelTimeMinutes: Math.round(travelTimeSeconds / 60),
+            vehicleArrivalTime: vehicleArrivalTime.toISOString(),
+            requiredArrivalTime: requiredArrivalTime.toISOString(),
+            bufferMinutes: config.bufferMinutes,
+          });
+
+          if (vehicleArrivalTime > requiredArrivalTime) {
+            canArriveInTime = false;
+            // Calculate when this vehicle could actually be available (arrival + buffer)
+            vehicleArrivalTime = addMinutes(vehicleArrivalTime, config.bufferMinutes);
+          }
+        } else {
+          // Could not calculate route, assume vehicle is not available
+          log('travel_route_failed', {
+            vehicleId: vehicle.id,
+            from: priorTripEndLocation,
+            to: pickupLocation,
+          });
+          canArriveInTime = false;
+        }
       }
     }
 
-    if (isAvailable) {
-      log('vehicle_available', { vehicleId: vehicle.id, requestedTime: requestedTime.toISOString() });
-      return vehicle;
+    // Check if new trip would conflict with a subsequent trip
+    if (canArriveInTime && nextTrip) {
+      const nextTripStart = new Date(nextTrip.departureTime);
+      const nextTripPickupLocation = nextTrip.stops[0]?.location;
+
+      if (nextTripPickupLocation) {
+        // Calculate travel time from new trip's dropoff to next trip's pickup
+        // For simplicity, we check if there's enough time gap
+        const gapMinutes = differenceInMinutes(nextTripStart, newTripEnd);
+
+        if (gapMinutes < config.bufferMinutes) {
+          log('conflict_with_next_trip', {
+            vehicleId: vehicle.id,
+            nextTripId: nextTrip.id,
+            newTripEnd: newTripEnd.toISOString(),
+            nextTripStart: nextTripStart.toISOString(),
+            gapMinutes,
+          });
+          canArriveInTime = false;
+        }
+      }
+    }
+
+    // Track earliest arrival time across all vehicles
+    if (vehicleArrivalTime && (!earliestArrivalTime || vehicleArrivalTime < earliestArrivalTime)) {
+      earliestArrivalTime = vehicleArrivalTime;
+    }
+
+    if (canArriveInTime) {
+      log('vehicle_available', {
+        vehicleId: vehicle.id,
+        requestedTime: requestedTime.toISOString(),
+        hasPriorTrip: !!priorTrip,
+      });
+      return { vehicle, earliestAvailableTime: null };
     }
   }
 
-  log('no_vehicle_available', { requestedTime: requestedTime.toISOString() });
+  log('no_vehicle_available', {
+    requestedTime: requestedTime.toISOString(),
+    earliestAvailableTime: earliestArrivalTime?.toISOString(),
+  });
+
+  return { vehicle: null, earliestAvailableTime: earliestArrivalTime };
+}
+
+// Find the trip that ends just before the requested time
+function findPriorTrip(sortedTrips: Trip[], requestedTime: Date): Trip | null {
+  let priorTrip: Trip | null = null;
+
+  for (const trip of sortedTrips) {
+    const lastStop = trip.stops[trip.stops.length - 1];
+    const tripEndTime = lastStop ? new Date(lastStop.scheduledTime) : new Date(trip.departureTime);
+
+    if (tripEndTime <= requestedTime) {
+      priorTrip = trip; // Keep the latest one that ends before requested time
+    } else {
+      break; // Trips are sorted, so we can stop once we pass requestedTime
+    }
+  }
+
+  return priorTrip;
+}
+
+// Find the trip that starts after the given time
+function findNextTrip(sortedTrips: Trip[], afterTime: Date): Trip | null {
+  for (const trip of sortedTrips) {
+    const tripStart = new Date(trip.departureTime);
+    if (tripStart > afterTime) {
+      return trip;
+    }
+  }
   return null;
 }
 

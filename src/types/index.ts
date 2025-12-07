@@ -63,6 +63,7 @@ export interface AppConfig {
   seatsPerVehicle: number;
   maxDetourMinutes: number;
   minutesPerStop: number;
+  bufferMinutes: number; // Buffer time between vehicle arrival and pickup
   googleMapsApiKey: string;
 }
 
@@ -91,6 +92,7 @@ export interface MatchResult {
   estimatedDropoffTime?: string;
   estimatedDuration?: number; // seconds - computed from Google Maps
   reason?: string;
+  earliestAvailableTime?: string; // ISO string - earliest time a vehicle could be available
   routePolyline?: string;
   newStops?: TripStop[];
 }
